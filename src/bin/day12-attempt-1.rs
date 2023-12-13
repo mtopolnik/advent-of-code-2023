@@ -1,4 +1,4 @@
-use std::{cmp::min, fs::read_to_string, io::Write, time::Instant};
+use std::{cmp::min, fs::read_to_string, io::Write};
 
 type Count = usize;
 type AsciiChar = u8;
@@ -37,29 +37,23 @@ fn main() {
     let result: usize = input
         .iter()
         .map(|(record, group_sizes)| {
+            print!("{} {group_sizes:?}", String::from_utf8_lossy(record));
+            std::io::stdout().flush().unwrap();
             let x = num_arrangements(record, group_sizes);
-            println!("num_arrangements {x}");
+            println!(" -> {x}");
             x
         })
         .sum();
-    println!("Part 1: {result}");
+    println!("Answer: {result}");
 }
 
 fn num_arrangements(record: &[AsciiChar], group_sizes: &[Count]) -> usize {
-    let start = Instant::now();
     let groups_plus_gaps = group_sizes
         .iter()
         .map(|size| *size as Count + 1)
         .sum::<Count>();
     let extra_gap_count = record.len() as Count - (groups_plus_gaps - 1);
     let placement_count = group_sizes.len() as Count + 1;
-    let arrangement_count =
-        num_integer::binomial(extra_gap_count + placement_count - 1, placement_count - 1);
-    println!(
-        "record {}, group_sizes {group_sizes:?}, extra_gap_count {extra_gap_count}, \
-        placement_count {placement_count}, total_num_arrangements {arrangement_count}",
-        String::from_utf8_lossy(record)
-    );
     let mut num_valid_arrangements = 0;
     for gap_arrangement in gap_arrangements(extra_gap_count, placement_count, &group_sizes, &record)
     {
@@ -67,10 +61,6 @@ fn num_arrangements(record: &[AsciiChar], group_sizes: &[Count]) -> usize {
             num_valid_arrangements += 1;
         }
     }
-    println!(
-        "valid arrangements: {num_valid_arrangements}, elapsed: {:?}",
-        start.elapsed()
-    );
     num_valid_arrangements
 }
 

@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 regex = "1.10.2"
-num-integer = "0.1.45"
+memoize = "0.4.1"
