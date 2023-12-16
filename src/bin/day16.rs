@@ -20,56 +20,23 @@ fn main() {
         .lines()
         .map(|line| line.bytes().map(|b| b.into()).collect())
         .collect();
-    let energized_count = count_energized_tiles(
-        &mut grid,
-        BeamState {
-            y: 0,
-            x: 0,
-            dir_y: 0,
-            dir_x: 1,
-        },
-    );
+    let energized_count =
+        count_energized_tiles(&mut grid, BeamState { y: 0, x: 0, dir_y: 0, dir_x: 1 });
     println!("Part 1: {energized_count}"); // 8021
     let size = grid.len();
     let max_energized_count = (0..size)
         .into_iter()
         .flat_map(|i| {
             [
+                count_energized_tiles(&mut grid, BeamState { y: i, x: 0, dir_y: 0, dir_x: 1 }),
                 count_energized_tiles(
                     &mut grid,
-                    BeamState {
-                        y: i,
-                        x: 0,
-                        dir_y: 0,
-                        dir_x: 1,
-                    },
+                    BeamState { y: i, x: size - 1, dir_y: 0, dir_x: -1 },
                 ),
+                count_energized_tiles(&mut grid, BeamState { y: 0, x: i, dir_y: 1, dir_x: 0 }),
                 count_energized_tiles(
                     &mut grid,
-                    BeamState {
-                        y: i,
-                        x: size - 1,
-                        dir_y: 0,
-                        dir_x: -1,
-                    },
-                ),
-                count_energized_tiles(
-                    &mut grid,
-                    BeamState {
-                        y: 0,
-                        x: i,
-                        dir_y: 1,
-                        dir_x: 0,
-                    },
-                ),
-                count_energized_tiles(
-                    &mut grid,
-                    BeamState {
-                        y: size - 1,
-                        x: i,
-                        dir_y: -1,
-                        dir_x: 0,
-                    },
+                    BeamState { y: size - 1, x: i, dir_y: -1, dir_x: 0 },
                 ),
             ]
             .into_iter()
@@ -83,13 +50,7 @@ fn count_energized_tiles(grid: &mut [Vec<Tile>], init_state: BeamState) -> usize
     let size = grid.len() as isize;
     let mut todo_list: Vec<BeamState> = vec![init_state];
     loop {
-        let Some(BeamState {
-            mut y,
-            mut x,
-            mut dir_y,
-            mut dir_x,
-        }) = todo_list.pop()
-        else {
+        let Some(BeamState { mut y, mut x, mut dir_y, mut dir_x }) = todo_list.pop() else {
             break;
         };
         loop {
@@ -207,9 +168,6 @@ fn debug_print(grid: &[Vec<Tile>], y: usize, x: usize, dir_y: isize, dir_x: isiz
 
 impl From<u8> for Tile {
     fn from(symbol: u8) -> Self {
-        Tile {
-            symbol,
-            ..Default::default()
-        }
+        Tile { symbol, ..Default::default() }
     }
 }

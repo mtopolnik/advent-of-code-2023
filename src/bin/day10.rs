@@ -20,11 +20,7 @@ struct Tile {
 
 impl From<u8> for Tile {
     fn from(symbol: u8) -> Self {
-        Tile {
-            symbol,
-            on_path: false,
-            inside: false,
-        }
+        Tile { symbol, on_path: false, inside: false }
     }
 }
 
