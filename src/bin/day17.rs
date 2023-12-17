@@ -1,39 +1,30 @@
-use std::{
-    collections::{hash_map::RandomState, HashSet},
-    fs::read_to_string,
-    sync::OnceLock,
-    thread::sleep,
-    time::Duration,
-};
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum Direction {
-    Start,
-    Up,
-    Down,
-    Left,
-    Right,
-}
 use memoize::memoize;
+use std::{fs::read_to_string, process::exit, sync::OnceLock, thread::sleep, time::Duration};
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
 use Direction::*;
 
-struct StepOption {
-    direction: Direction,
-    step_countdown: u8,
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Turn {
+    Left,
+    Straight,
+    Right,
+}
+use Turn::*;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct SearchStep {
     y: u16,
     x: u16,
-}
-
-impl Direction {
-    fn opposite(&self) -> Direction {
-        match self {
-            Up => Down,
-            Down => Up,
-            Left => Right,
-            Right => Left,
-            Start => Start,
-        }
-    }
+    direction: Direction,
+    step_countdown: u8,
+    total_rotation: i8,
 }
 
 fn main() {
@@ -45,93 +36,134 @@ fn main() {
             .map(|line| line.bytes().map(|b| b - b'0').collect())
             .collect()
     });
-    let min_heat_loss = min_heat_loss(&city, 0, 0, Start, 0, Vec::new());
+    let min_heat_loss = min_heat_loss(
+        &city,
+        SearchStep {
+            y: 0,
+            x: 0,
+            direction: East,
+            step_countdown: 4,
+            total_rotation: 0,
+        },
+    );
     println!("Part 1: {min_heat_loss}");
 }
 
 #[memoize]
-fn min_heat_loss(
-    city: &'static [Vec<u8>],
-    y: u16,
-    x: u16,
-    direction: Direction,
-    step_countdown: u8,
-    mut visited: Vec<(u16, u16)>,
-) -> usize {
-    if visited.contains(&(y, x)) {
-        return usize::MAX;
-    }
-    visited.push((y, x));
-    debug_print(&city, &visited);
-    step_options(city, y, x, direction, step_countdown)
+fn min_heat_loss(city: &'static [Vec<u8>], step1: SearchStep) -> usize {
+    let min = step_options(city, step1)
         .into_iter()
-        .map(|StepOption { direction, step_countdown, y, x }| {
-            let min_heat_loss =
-                min_heat_loss(city, y, x, direction, step_countdown, visited.clone());
-            min_heat_loss
-                + if min_heat_loss == usize::MAX {
-                    0
-                } else {
-                    city[y as usize][x as usize] as usize
-                }
-        })
+        .map(|step| city[step.y as usize][step.x as usize] as usize + min_heat_loss(city, step))
         .min()
-        .unwrap_or(0)
+        .unwrap_or(0);
+    println!("min = {min}");
+    min
 }
 
-fn step_options(
-    city: &[Vec<u8>],
-    y: u16,
-    x: u16,
-    direction: Direction,
-    step_countdown: u8,
-) -> Vec<StepOption> {
+fn step_options(city: &[Vec<u8>], step: SearchStep) -> Vec<SearchStep> {
+    let SearchStep { y, x, direction, step_countdown, total_rotation } = step;
     let height = city.len() as i16;
     let width = city[0].len() as i16;
     let y = y as i16;
     let x = x as i16;
     if y == height - 1 && x == width - 1 {
-        println!("Reached factory");
         return vec![];
     }
-    [Right, Down, Left, Up]
+    [Straight, Left, Right]
         .into_iter()
-        .filter(|&d| d != direction.opposite())
-        .filter_map(|d| {
-            let step_countdown = if d == direction {
+        .filter_map(|turn| {
+            let step_countdown = if turn == Straight {
                 step_countdown as i8 - 1
             } else {
-                2
+                3
             };
-            let (y, x) = match d {
-                Up => (y - 1, x),
-                Down => (y + 1, x),
-                Left => (y, x - 1),
-                Right => (y, x + 1),
-                _ => panic!("What??"),
+            let direction2 = direction.after_turn(turn);
+            let total_rotation2 = total_rotation + i8::from(turn);
+            let (y, x) = match direction2 {
+                North => (y - 1, x),
+                South => (y + 1, x),
+                West => (y, x - 1),
+                East => (y, x + 1),
             };
-            (step_countdown >= 0 && y >= 0 && x >= 0 && y < height && x < width).then_some(
-                StepOption {
-                    direction: d,
-                    step_countdown: step_countdown as u8,
+            if step_countdown > 0
+                && total_rotation2.abs() < 4
+                && y >= 0
+                && x >= 0
+                && y < height
+                && x < width
+            {
+                println!(
+                    "{direction:?} <{turn:?}> {direction2:?}, {total_rotation} -> {total_rotation2}"
+                );
+                debug_print(city, y as u16, x as u16);
+                sleep(Duration::new(0, 100_000_000));
+                Some(SearchStep {
                     y: y as u16,
                     x: x as u16,
-                },
-            )
+                    direction: direction2,
+                    step_countdown: step_countdown as u8,
+                    total_rotation: total_rotation2,
+                })
+            } else {
+                None
+            }
         })
         .collect()
 }
 
-fn debug_print(city: &[Vec<u8>], path: &[(u16, u16)]) {
-    let height = city.len() as u16;
-    let width = city[0].len() as u16;
-    let path_set: HashSet<(u16, u16), RandomState> = HashSet::from_iter(path.iter().cloned());
-    for y in 0..height {
-        for x in 0..width {
-            print!("{}", if path_set.contains(&(y, x)) { 'o' } else { ' ' });
+fn debug_print(city: &[Vec<u8>], y_pos: u16, x_pos: u16) {
+    for y in 0..city.len() {
+        for x in 0..city[0].len() {
+            print!(
+                "{}",
+                if y as u16 == y_pos && x as u16 == x_pos {
+                    'o'
+                } else {
+                    '.'
+                }
+            )
         }
         println!();
     }
     println!();
-    sleep(Duration::new(0, 100_000_000));
+}
+
+impl From<u8> for Direction {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => North,
+            1 => East,
+            2 => South,
+            3 => West,
+            _ => panic!("{value}"),
+        }
+    }
+}
+
+impl From<Direction> for u8 {
+    fn from(value: Direction) -> Self {
+        match value {
+            North => 0,
+            East => 1,
+            South => 2,
+            West => 3,
+        }
+    }
+}
+
+impl Direction {
+    fn after_turn(&self, turn: Turn) -> Direction {
+        let delta = i8::from(turn) + 4;
+        (((u8::from(*self) + delta as u8) % 4) as u8).into()
+    }
+}
+
+impl From<Turn> for i8 {
+    fn from(value: Turn) -> Self {
+        match value {
+            Left => -1,
+            Straight => 0,
+            Right => 1,
+        }
+    }
 }
