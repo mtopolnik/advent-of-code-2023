@@ -1,8 +1,9 @@
-use std::{collections::HashMap, fs::read_to_string, thread::sleep, time::Duration};
+use std::fs::read_to_string;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Default, Debug)]
-struct Block {
-    weight: u8,
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+struct DijkstraNode {
+    y: u16,
+    x: u16,
     direction: Option<Direction>,
     straight_steps: u8,
 }
@@ -25,103 +26,87 @@ enum Turn {
 use priority_queue::PriorityQueue;
 use Turn::*;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct SearchStep {
-    y: u16,
-    x: u16,
-    direction: Option<Direction>,
-    straight_steps: u8,
-}
-
 fn main() {
-    let city: Vec<Vec<Block>> = read_to_string("input/day17.txt")
+    let city: Vec<Vec<u8>> = read_to_string("input/day17.txt")
         .unwrap()
         .lines()
-        .map(|line| {
-            line.bytes()
-                .map(|b| Block { weight: b - b'0', ..Default::default() })
-                .collect()
-        })
+        .map(|line| line.bytes().map(|b| b - b'0').collect())
         .collect();
-    println!("Part 1: {}", least_heat_loss(city)); // 1239 is too low
+    println!("Part 1: {}", least_heat_loss(city)); // 1263
 }
 
-fn least_heat_loss(mut city: Vec<Vec<Block>>) -> u32 {
+fn least_heat_loss(city: Vec<Vec<u8>>) -> u32 {
     let height = city.len() as u16;
     let width = city[0].len() as u16;
-    let mut unvisited: PriorityQueue<(u16, u16), u32> = PriorityQueue::new();
+    let mut unvisited: PriorityQueue<DijkstraNode, u32> = PriorityQueue::new();
     for y in 0..height {
         for x in 0..width {
-            unvisited.push(
-                (y as u16, x as u16),
-                if y == 0 && x == 0 { u32::MAX } else { 0 },
-            );
+            for direction in [North, East, South, West] {
+                for straight_steps in [1, 2, 3] {
+                    unvisited.push(
+                        DijkstraNode {
+                            y: y as u16,
+                            x: x as u16,
+                            direction: Some(direction),
+                            straight_steps,
+                        },
+                        0,
+                    );
+                }
+            }
         }
     }
+    unvisited.push(
+        DijkstraNode { y: 0, x: 0, direction: None, straight_steps: 0 },
+        u32::MAX,
+    );
     loop {
-        let Some(((y, x), priority)) = unvisited.pop() else {
+        let Some((dijkstra_node, priority)) = unvisited.pop() else {
             panic!("No route to the factory!");
         };
+        let DijkstraNode { y, x, direction, straight_steps } = dijkstra_node;
         if priority == 0 {
             panic!("No route to the factory!")
         }
-        debug_print_route(y as i16, x as i16, &city);
         let heat_loss = u32::MAX - priority;
         if y == height - 1 && x == width - 1 {
             return heat_loss;
         }
-        let visiting = city[y as usize][x as usize];
-        let step_options = step_options(
-            &city,
-            SearchStep {
-                y,
-                x,
-                direction: visiting.direction,
-                straight_steps: visiting.straight_steps,
-            },
-        );
-        for SearchStep {
-            y: next_y,
-            x: next_x,
-            direction: next_direction,
-            straight_steps,
-        } in step_options
-        {
-            let Some((_, &priority)) = unvisited.get(&(next_y, next_x)) else {
+        let neighbors = neighbors(&city, DijkstraNode { y, x, direction, straight_steps });
+        for neighbor in neighbors {
+            let DijkstraNode { y: neighbor_y, x: neighbor_x, .. } = neighbor;
+            let Some((_, &priority)) = unvisited.get(&neighbor) else {
                 continue;
             };
-            let least_heat_loss = u32::MAX - priority;
-            let next_block = &mut city[next_y as usize][next_x as usize];
-            let next_weight = next_block.weight as u32;
-            let next_heat_loss = heat_loss + next_weight;
-            if next_heat_loss < least_heat_loss {
-                unvisited.change_priority(&(next_y, next_x), u32::MAX - next_heat_loss);
-                next_block.direction = next_direction;
-                next_block.straight_steps = straight_steps;
+            let least_heat_loss_so_far = u32::MAX - priority;
+            let heat_loss_delta = city[neighbor_y as usize][neighbor_x as usize];
+            let this_heat_loss = heat_loss + heat_loss_delta as u32;
+            if this_heat_loss < least_heat_loss_so_far {
+                unvisited.change_priority(&neighbor, u32::MAX - this_heat_loss);
             }
         }
     }
 }
 
-fn step_options(city: &[Vec<Block>], step: SearchStep) -> Vec<SearchStep> {
-    let SearchStep { y, x, direction, straight_steps } = step;
+fn neighbors(city: &[Vec<u8>], step: DijkstraNode) -> Vec<DijkstraNode> {
+    let DijkstraNode { y, x, direction, straight_steps } = step;
     let height = city.len() as i16;
     let width = city[0].len() as i16;
     let y = y as i16;
     let x = x as i16;
     let Some(incoming_direction) = direction else {
         return vec![
-            SearchStep {
+            DijkstraNode {
                 y: 0,
                 x: 1,
                 direction: Some(East),
-                straight_steps: 0,
+                straight_steps: 1,
             },
-            SearchStep {
+            DijkstraNode {
                 y: 1,
                 x: 0,
                 direction: Some(South),
-                straight_steps: 0,
+                straight_steps: 1,
             },
         ];
     };
@@ -131,12 +116,12 @@ fn step_options(city: &[Vec<Block>], step: SearchStep) -> Vec<SearchStep> {
             let straight_steps = if turn == Straight {
                 straight_steps as i8 + 1
             } else {
-                0
+                1
             };
             let outgoing_direction = incoming_direction.after_turn(turn);
             let (y, x) = follow_direction(outgoing_direction, y, x);
-            (straight_steps < 3 && y >= 0 && x >= 0 && y < height && x < width).then_some(
-                SearchStep {
+            (straight_steps <= 3 && y >= 0 && x >= 0 && y < height && x < width).then_some(
+                DijkstraNode {
                     y: y as u16,
                     x: x as u16,
                     direction: Some(outgoing_direction),
@@ -154,47 +139,6 @@ fn follow_direction(direction: Direction, y: i16, x: i16) -> (i16, i16) {
         West => (y, x - 1),
         East => (y, x + 1),
     }
-}
-
-fn debug_print_route(mut y: i16, mut x: i16, city: &[Vec<Block>]) {
-    let mut directions = HashMap::new();
-    loop {
-        if (y, x) == (0, 0) {
-            break;
-        }
-        let (delta_y, delta_x, symbol) = match city[y as usize][x as usize].direction.unwrap() {
-            East => (0, 1, '>'),
-            West => (0, -1, '<'),
-            South => (1, 0, 'v'),
-            North => (-1, 0, '^'),
-        };
-        directions.insert((y, x), symbol);
-        (y, x) = (y - delta_y, x - delta_x);
-    }
-    for y in 0..city.len() {
-        for x in 0..city[0].len() {
-            if let Some(symbol) = directions.get(&(y as i16, x as i16)) {
-                print!("{symbol}")
-            } else {
-                print!("{}", city[y][x].weight);
-            };
-        }
-        println!();
-    }
-    println!();
-    sleep(Duration::new(0, 20_000_000));
-}
-
-fn debug_print(city: &[Vec<Block>]) {
-    for y in 0..city.len() {
-        for x in 0..city[0].len() {
-            let block = city[y][x];
-            print!("{}", if block.direction.is_some() { 'o' } else { '.' })
-        }
-        println!();
-    }
-    println!();
-    sleep(Duration::new(0, 100_000_000));
 }
 
 impl From<u8> for Direction {
