@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 regex = "1.10.2"
 memoize = "0.4.1"
+priority-queue = "1.3.2"
