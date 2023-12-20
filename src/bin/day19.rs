@@ -42,12 +42,6 @@ impl Rule {
     }
 }
 
-#[derive(Debug)]
-struct SearchState<'a> {
-    workflow_name: &'a str,
-    part_choice: PartChoice,
-}
-
 #[derive(Clone, Copy)]
 enum Category {
     X,
@@ -125,92 +119,11 @@ fn main() {
         })
         .collect();
 
-    part1(&parts, &workflows);
-
-    // workflow_name -> vector of (back_workflow_name, back_workflow, rule_index) sending to it
-    let mut back_map: HashMap<&str, Vec<(&str, &Workflow, u8)>> = HashMap::new();
-    let mut todo_list: Vec<SearchState> = Vec::new();
-    let mut accepted_choices: Vec<PartChoice> = Vec::new();
-    for (workflow_name, workflow) in workflows.iter() {
-        let mut part_choice: PartChoice = [(1, 4000), (1, 4000), (1, 4000), (1, 4000)];
-        for (i, rule) in workflow.rules.iter().enumerate() {
-            match &*rule.on_match {
-                "A" => {
-                    let search_state = SearchState {
-                        workflow_name,
-                        part_choice: restrict_choice(part_choice, &rule),
-                    };
-                    todo_list.push(search_state);
-                }
-                "R" => {}
-                other => {
-                    back_map
-                        .entry(other)
-                        .or_default()
-                        .push((workflow_name, workflow, i as u8));
-                }
-            }
-            part_choice = restrict_choice(part_choice, &rule.negate());
-        }
-        match &*workflow.fallback {
-            "A" => {
-                todo_list.push(SearchState { workflow_name, part_choice });
-            }
-            "R" => {}
-            other => {
-                back_map.entry(other).or_default().push((
-                    workflow_name,
-                    workflow,
-                    workflow.rules.len() as u8,
-                ));
-            }
-        }
-    }
-    loop {
-        let Some(SearchState { workflow_name, mut part_choice }) = todo_list.pop() else {
-            break;
-        };
-        if workflow_name == "in" {
-            accepted_choices.push(part_choice);
-            continue;
-        }
-        for (back_workflow_name, back_workflow, rule_pos) in back_map.get(&*workflow_name).unwrap()
-        {
-            for (i, rule) in back_workflow.rules.iter().enumerate() {
-                if i as u8 == *rule_pos {
-                    let search_state = SearchState {
-                        workflow_name: back_workflow_name,
-                        part_choice: restrict_choice(part_choice, &rule),
-                    };
-                    todo_list.push(search_state);
-                    break;
-                } else {
-                    part_choice = restrict_choice(part_choice, &rule.negate());
-                }
-            }
-            if *rule_pos == back_workflow.rules.len() as u8 {
-                let search_state = SearchState { workflow_name: back_workflow_name, part_choice };
-                todo_list.push(search_state);
-            }
-        }
-    }
-    for choice in accepted_choices {
-        println!("{choice:?}");
-    }
+    println!("Part 1: {}", part1(&parts, &workflows)); // 346230
+    println!("Part 2: {}", part2(workflows)); // 124693661917133
 }
 
-fn restrict_choice(mut part_choice: PartChoice, rule: &Rule) -> PartChoice {
-    let Rule { category, ord, limit, .. } = rule;
-    let (low, high) = &mut part_choice[usize::from(category)];
-    match ord {
-        Ordering::Less => *high = limit - 1,
-        Ordering::Greater => *low = limit + 1,
-        Ordering::Equal => panic!(),
-    };
-    part_choice
-}
-
-fn part1(parts: &[[u16; 4]], workflows: &HashMap<String, Workflow>) {
+fn part1(parts: &[[u16; 4]], workflows: &HashMap<String, Workflow>) -> usize {
     let mut accepted: Vec<Part> = Vec::new();
     'part_loop: for part in parts {
         let mut workflow = &workflows["in"];
@@ -234,9 +147,56 @@ fn part1(parts: &[[u16; 4]], workflows: &HashMap<String, Workflow>) {
             }
         }
     }
-    let result = accepted
+    accepted
         .into_iter()
         .map(|part| part.into_iter().map(|n| n as usize).sum::<usize>())
-        .sum::<usize>();
-    println!("Part 1: {result}");
+        .sum::<usize>()
+}
+
+fn part2(workflows: HashMap<String, Workflow>) -> usize {
+    let start_wf = workflows.get("in").unwrap();
+    let mut todo_list: Vec<(&Workflow, PartChoice)> = Vec::new();
+    todo_list.push((start_wf, [(1, 4000), (1, 4000), (1, 4000), (1, 4000)]));
+    let mut combination_count = 0_usize;
+    loop {
+        let Some((wf, mut part_choice)) = todo_list.pop() else {
+            break;
+        };
+        for rule in wf.rules.iter() {
+            let restricted_on_match = restrict_choice(part_choice, &rule);
+            match &*rule.on_match {
+                "R" => {}
+                "A" => combination_count += count_combinations(restricted_on_match),
+                other => {
+                    todo_list.push((workflows.get(other).unwrap(), restricted_on_match));
+                }
+            };
+            part_choice = restrict_choice(part_choice, &rule.negate());
+        }
+        match &*wf.fallback {
+            "R" => {}
+            "A" => combination_count += count_combinations(part_choice),
+            other => todo_list.push((workflows.get(other).unwrap(), part_choice)),
+        };
+    }
+    combination_count
+}
+
+fn count_combinations(part_choice: PartChoice) -> usize {
+    part_choice
+        .into_iter()
+        .map(|(low, high)| (high - low + 1) as usize)
+        .reduce(|acc, count| acc * count)
+        .unwrap()
+}
+
+fn restrict_choice(mut part_choice: PartChoice, rule: &Rule) -> PartChoice {
+    let Rule { category, ord, limit, .. } = rule;
+    let (low, high) = &mut part_choice[usize::from(category)];
+    match ord {
+        Ordering::Less => *high = limit - 1,
+        Ordering::Greater => *low = limit + 1,
+        Ordering::Equal => panic!(),
+    };
+    part_choice
 }
