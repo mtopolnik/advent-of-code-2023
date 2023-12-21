@@ -1,3 +1,4 @@
+use priority_queue::PriorityQueue;
 use std::fs::read_to_string;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -23,7 +24,6 @@ enum Turn {
     Straight,
     Right,
 }
-use priority_queue::PriorityQueue;
 use Turn::*;
 
 fn main() {

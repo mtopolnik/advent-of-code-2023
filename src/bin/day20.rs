@@ -28,7 +28,7 @@ struct Signal {
 }
 
 fn main() {
-    let input = &read_to_string("input/day20.txt").unwrap();
+    let input = read_to_string("input/day20.txt").unwrap();
     let mut modules: HashMap<String, Module> = input
         .lines()
         .map(|line| {

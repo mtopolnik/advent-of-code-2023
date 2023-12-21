@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, fs::read_to_string};
 
 fn main() {
-    let input = &read_to_string("input/day18.txt").unwrap();
+    let input = read_to_string("input/day18.txt").unwrap();
     let (instructions_1, instructions_2): (Vec<(Direction, usize)>, Vec<(Direction, usize)>) =
         input
             .lines()

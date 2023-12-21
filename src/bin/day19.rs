@@ -83,7 +83,7 @@ fn ordering_from(symbol: &str) -> Ordering {
 }
 
 fn main() {
-    let input = &read_to_string("input/day19.txt").unwrap();
+    let input = read_to_string("input/day19.txt").unwrap();
     let (workflow_str, parts_str) = input.split_once("\n\n").unwrap();
     let rule_re = Regex::new(r"([a-z]+)([<>])(\d+):([a-zAR]+)").unwrap();
     let fallback_re = Regex::new(r",([a-zAR]+)\}$").unwrap();
