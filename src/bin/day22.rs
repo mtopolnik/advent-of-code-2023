@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fs::read_to_string,
 };
 
@@ -37,8 +37,18 @@ fn main() {
     }
     let_bricks_fall(&mut grid);
     let (supporting_brick_counts, supported_bricks) = analyze_dependencies(&grid);
-    let removable_bricks = find_removable_bricks(&grid);
-    println!("Part 1: {}", removable_bricks.len()); // 482
+    // let removable_bricks = find_removable_bricks(&grid);
+    let removable_bricks = supported_bricks
+        .iter()
+        .filter(|&(_, supported_ids)| {
+            supported_ids
+                .iter()
+                .filter(|id| supporting_brick_counts[id] == 1)
+                .next()
+                .is_none()
+        })
+        .count();
+    println!("Part 1: {}", removable_bricks); // 482
     let cascading_brick_total_count =
         count_all_cascading_bricks(supporting_brick_counts, supported_bricks);
     println!("Part 2: {cascading_brick_total_count}"); // 103010
@@ -85,58 +95,6 @@ fn let_bricks_fall(grid: &mut Grid) {
             }
         }
     }
-}
-
-fn find_removable_bricks(grid: &Grid) -> HashSet<u16> {
-    let mut removable_bricks = HashSet::<u16>::new();
-    for z in (1..Z_SIZE).rev() {
-        for x in 0..X_SIZE {
-            for y in 0..Y_SIZE {
-                let brick_id = grid[x][y][z];
-                if brick_id == 0 || removable_bricks.contains(&brick_id) {
-                    continue;
-                }
-                if z == Z_SIZE - 1 {
-                    // everything on the top cascades zero bricks
-                    removable_bricks.insert(brick_id);
-                    continue;
-                }
-                if grid[x][y][z + 1] == brick_id {
-                    // we're on the middle of a vertical brick, so we already handled it
-                    continue;
-                }
-                let coords_with_brick_above = all_brick_coords(&grid, x, y, z)
-                    .into_iter()
-                    .filter(|&(brick_x, brick_y)| grid[brick_x][brick_y][z + 1] != 0)
-                    .collect::<Vec<_>>();
-                if coords_with_brick_above.is_empty() {
-                    removable_bricks.insert(brick_id);
-                    continue;
-                }
-                let mut supported_ids = coords_with_brick_above
-                    .iter()
-                    .map(|&(x_above, y_above)| grid[x_above][y_above][z + 1])
-                    .collect::<BTreeSet<_>>();
-                for (brick_x, brick_y) in coords_with_brick_above {
-                    let brick_above_coords = all_brick_coords(&grid, brick_x, brick_y, z + 1);
-                    let has_other_support = brick_above_coords
-                        .into_iter()
-                        .filter(|&(x_prime, y_prime)| {
-                            ![0, brick_id].contains(&grid[x_prime][y_prime][z])
-                        })
-                        .next()
-                        .is_some();
-                    if has_other_support {
-                        supported_ids.remove(&grid[brick_x][brick_y][z + 1]);
-                    }
-                }
-                if supported_ids.is_empty() {
-                    removable_bricks.insert(brick_id);
-                }
-            }
-        }
-    }
-    removable_bricks
 }
 
 fn analyze_dependencies(grid: &Grid) -> (HashMap<u16, u16>, HashMap<u16, HashSet<u16>>) {
